@@ -85,7 +85,7 @@ func (s *DocumentStore) CreateDocument(ctx context.Context, d *influxdb.Document
 			service:  s.service,
 			tx:       tx,
 			ctx:      ctx,
-			mutative: true,
+			writable: true,
 		}
 		for _, opt := range opts {
 			if err := opt(d.ID, idx); err != nil {
@@ -101,7 +101,7 @@ type DocumentIndex struct {
 	service  *Service
 	ctx      context.Context
 	tx       Tx
-	mutative bool
+	writable bool
 }
 
 func (i *DocumentIndex) AddDocumentOwner(id influxdb.ID, ownerType string, ownerID influxdb.ID) error {
@@ -165,7 +165,7 @@ func (i *DocumentIndex) IsOrgAccessor(userID influxdb.ID, orgID influxdb.ID) err
 		ResourceID:   orgID,
 	}
 
-	if i.mutative {
+	if i.writable {
 		f.UserType = influxdb.Owner
 	}
 
@@ -222,7 +222,7 @@ func (i *DocumentIndex) GetDocumentsAccessors(docID influxdb.ID) ([]influxdb.ID,
 		ResourceType: influxdb.DocumentsResourceType,
 		ResourceID:   docID,
 	}
-	if i.mutative {
+	if i.writable {
 		f.UserType = influxdb.Owner
 	}
 	ms, err := i.service.findUserResourceMappings(i.ctx, i.tx, f)
@@ -251,7 +251,7 @@ func (i *DocumentIndex) GetAccessorsDocuments(ownerType string, ownerID influxdb
 		UserID:       ownerID,
 		ResourceType: influxdb.DocumentsResourceType,
 	}
-	if i.mutative {
+	if i.writable {
 		f.UserType = influxdb.Owner
 	}
 	ms, err := i.service.findUserResourceMappings(i.ctx, i.tx, f)
@@ -351,15 +351,9 @@ func (s *Service) findDocumentByID(ctx context.Context, tx Tx, ns string, id inf
 		return nil, err
 	}
 
-	d, err := s.findDocumentDataByID(ctx, tx, ns, id)
-	if err != nil {
-		return nil, err
-	}
-
 	return &influxdb.Document{
 		ID:   id,
 		Meta: *m,
-		Data: d,
 	}, nil
 }
 
@@ -405,6 +399,27 @@ func (s *Service) findDocumentDataByID(ctx context.Context, tx Tx, ns string, id
 	return data, nil
 }
 
+type DocumentDecorator struct {
+	data      bool
+	labels    bool
+	accessors bool
+
+	writable bool
+}
+
+func (d *DocumentDecorator) IncludeData() error {
+	if d.writable {
+		return &influxdb.Error{
+			Code: influxdb.EInternal,
+			Msg:  "cannot include data in document",
+		}
+	}
+
+	d.data = true
+
+	return nil
+}
+
 func (s *DocumentStore) FindDocuments(ctx context.Context, opts ...influxdb.DocumentFindOptions) ([]*influxdb.Document, error) {
 	var ds []*influxdb.Document
 	err := s.service.kv.View(func(tx Tx) error {
@@ -422,9 +437,11 @@ func (s *DocumentStore) FindDocuments(ctx context.Context, opts ...influxdb.Docu
 			tx:      tx,
 		}
 
+		dd := &DocumentDecorator{}
+
 		var ids []influxdb.ID
 		for _, opt := range opts {
-			is, err := opt(idx)
+			is, err := opt(idx, dd)
 			if err != nil {
 				return err
 			}
@@ -435,6 +452,16 @@ func (s *DocumentStore) FindDocuments(ctx context.Context, opts ...influxdb.Docu
 		docs, err := s.service.findDocumentsByID(ctx, tx, s.namespace, ids...)
 		if err != nil {
 			return err
+		}
+
+		if dd.data {
+			for _, doc := range docs {
+				d, err := s.service.findDocumentDataByID(ctx, tx, s.namespace, doc.ID)
+				if err != nil {
+					return err
+				}
+				doc.Data = d
+			}
 		}
 
 		ds = append(ds, docs...)
@@ -473,14 +500,6 @@ func (s *Service) findDocuments(ctx context.Context, tx Tx, ns string, ds *[]*in
 		*ds = append(*ds, d)
 	}
 
-	for _, d := range *ds {
-		data, err := s.findDocumentDataByID(ctx, tx, ns, d.ID)
-		if err != nil {
-			return err
-		}
-		d.Data = data
-	}
-
 	return nil
 }
 
@@ -496,12 +515,13 @@ func (s *DocumentStore) DeleteDocuments(ctx context.Context, opts ...influxdb.Do
 			service:  s.service,
 			tx:       tx,
 			ctx:      ctx,
-			mutative: true,
+			writable: true,
 		}
+		dd := &DocumentDecorator{writable: true}
 
 		ids := []influxdb.ID{}
 		for _, opt := range opts {
-			dids, err := opt(idx)
+			dids, err := opt(idx, dd)
 			if err != nil {
 				return err
 			}
@@ -591,7 +611,7 @@ func (s *DocumentStore) UpdateDocument(ctx context.Context, d *influxdb.Document
 			service:  s.service,
 			tx:       tx,
 			ctx:      ctx,
-			mutative: true,
+			writable: true,
 		}
 		for _, opt := range opts {
 			if err := opt(d.ID, idx); err != nil {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/influxdb"
 	"github.com/influxdata/influxdb/kv"
 )
@@ -109,13 +110,13 @@ func TestDocumentStore_Integration(t *testing.T) {
 			t.Fatalf("failed to retrieve documents: %v", err)
 		}
 
-		if exp, got := []*influxdb.Document{d1, d2, d3}, ds; !docsEqual(exp, got) {
-			t.Errorf("documents are different -got/+want\ndiff %s", docsDiff(exp, got))
+		if exp, got := []*influxdb.Document{d1, d2, d3}, ds; !docsMetaEqual(exp, got) {
+			t.Errorf("documents are different -got/+want\ndiff %s", docsMetaDiff(exp, got))
 		}
 	})
 
 	t.Run("u1 can see o1s documents", func(t *testing.T) {
-		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s1))
+		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s1), influxdb.IncludeData)
 		if err != nil {
 			t.Fatalf("failed to retrieve documents: %v", err)
 		}
@@ -126,7 +127,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 	})
 
 	t.Run("u2 can see o1 and o2s documents", func(t *testing.T) {
-		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s2))
+		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s2), influxdb.IncludeData)
 		if err != nil {
 			t.Fatalf("failed to retrieve documents: %v", err)
 		}
@@ -225,9 +226,19 @@ func docsEqual(i1, i2 interface{}) bool {
 	return cmp.Equal(i1, i2, documentCmpOptions...)
 }
 
+func docsMetaEqual(i1, i2 interface{}) bool {
+	return cmp.Equal(i1, i2, documentMetaCmpOptions...)
+}
+
 func docsDiff(i1, i2 interface{}) string {
 	return cmp.Diff(i1, i2, documentCmpOptions...)
 }
+
+func docsMetaDiff(i1, i2 interface{}) string {
+	return cmp.Diff(i1, i2, documentMetaCmpOptions...)
+}
+
+var documentMetaCmpOptions = append(documentCmpOptions, cmpopts.IgnoreFields(influxdb.Document{}, "Data"))
 
 var documentCmpOptions = cmp.Options{
 	cmp.Comparer(func(x, y []byte) bool {

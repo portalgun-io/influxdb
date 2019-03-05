@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/influxdata/influxdb"
@@ -63,6 +64,38 @@ func NewDocumentHandler(b *DocumentBackend) *DocumentHandler {
 	return h
 }
 
+type documentResponse struct {
+	Links map[string]string `json:"links"`
+	*influxdb.Document
+}
+
+func newDocumentResponse(ns string, d *influxdb.Document) *documentResponse {
+	return &documentResponse{
+		Links: map[string]string{
+			"self": fmt.Sprintf("/api/v2/documents/%s/%s", ns, d.ID),
+		},
+		Document: d,
+	}
+}
+
+type documentsResponse struct {
+	Documents []*documentResponse `json:"documents"`
+	Included  []interface{}       `json:"included,omitempty"`
+}
+
+func newDocumentsResponse(ns string, docs []*influxdb.Document) *documentsResponse {
+	// TODO(desa): dedupe everything included in each document into a single included
+	// that is returned a the top level.
+	ds := make([]*documentResponse, 0, len(docs))
+	for _, doc := range docs {
+		ds = append(ds, newDocumentResponse(ns, doc))
+	}
+
+	return &documentsResponse{
+		Documents: ds,
+	}
+}
+
 // handlePostDocument is the HTTP handler for the POST /api/v2/documents/:ns route.
 func (h *DocumentHandler) handlePostDocument(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -90,7 +123,7 @@ func (h *DocumentHandler) handlePostDocument(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := encodeResponse(ctx, w, http.StatusCreated, req.Document); err != nil {
+	if err := encodeResponse(ctx, w, http.StatusCreated, newDocumentResponse(req.Namespace, req.Document)); err != nil {
 		logEncodingError(h.Logger, r, err)
 		return
 	}
@@ -154,7 +187,7 @@ func (h *DocumentHandler) handleGetDocuments(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := encodeResponse(ctx, w, http.StatusOK, ds); err != nil {
+	if err := encodeResponse(ctx, w, http.StatusOK, newDocumentsResponse(req.Namespace, ds)); err != nil {
 		logEncodingError(h.Logger, r, err)
 		return
 	}
@@ -204,13 +237,24 @@ func (h *DocumentHandler) handleGetDocument(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhereID(a, req.ID))
+	ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhereID(a, req.ID), influxdb.IncludeData)
 	if err != nil {
 		EncodeError(ctx, err, w)
 		return
 	}
 
-	if err := encodeResponse(ctx, w, http.StatusOK, ds); err != nil {
+	if len(ds) != 1 {
+		err := &influxdb.Error{
+			Code: influxdb.EInternal,
+			Msg:  fmt.Sprintf("found more than one document with id %s; please report this error", req.ID),
+		}
+		EncodeError(ctx, err, w)
+		return
+	}
+
+	d := ds[0]
+
+	if err := encodeResponse(ctx, w, http.StatusOK, newDocumentResponse(req.Namespace, d)); err != nil {
 		logEncodingError(h.Logger, r, err)
 		return
 	}
@@ -347,7 +391,24 @@ func (h *DocumentHandler) handlePutDocument(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := encodeResponse(ctx, w, http.StatusCreated, req.Document); err != nil {
+	ds, err := s.FindDocuments(ctx, influxdb.WhereID(req.Document.ID), influxdb.IncludeData)
+	if err != nil {
+		EncodeError(ctx, err, w)
+		return
+	}
+
+	if len(ds) != 1 {
+		err := &influxdb.Error{
+			Code: influxdb.EInternal,
+			Msg:  fmt.Sprintf("found more than one document with id %s; please report this error", req.ID),
+		}
+		EncodeError(ctx, err, w)
+		return
+	}
+
+	d := ds[0]
+
+	if err := encodeResponse(ctx, w, http.StatusOK, newDocumentResponse(req.Namespace, d)); err != nil {
 		logEncodingError(h.Logger, r, err)
 		return
 	}

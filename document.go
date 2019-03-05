@@ -10,9 +10,10 @@ type DocumentService interface {
 }
 
 type Document struct {
-	ID   ID           `json:"id"`
-	Meta DocumentMeta `json:"meta"`
-	Data interface{}  `json:"data,omitempty"` // TODO(desa): maybe this needs to be json.Marshaller & json.Unmarshaler
+	ID       ID            `json:"id"`
+	Meta     DocumentMeta  `json:"meta"`
+	Data     interface{}   `json:"data,omitempty"`     // TODO(desa): maybe this needs to be json.Marshaller & json.Unmarshaler
+	Included []interface{} `json:"included,omitempty"` // read only
 }
 
 type DocumentMeta struct {
@@ -42,9 +43,19 @@ type DocumentIndex interface {
 	FindOrganizationByName(n string) (ID, error)
 }
 
+type DocumentDecorator interface {
+	IncludeData() error
+}
+
+func IncludeData(_ DocumentIndex, dd DocumentDecorator) ([]ID, error) {
+	return nil, dd.IncludeData()
+}
+
 type DocumentCreateOptions func(ID, DocumentIndex) error
 
-type DocumentFindOptions func(DocumentIndex) ([]ID, error)
+// TODO(desa): consider changing this to have a single struct that has both
+// the decorator and the index on it.
+type DocumentFindOptions func(DocumentIndex, DocumentDecorator) ([]ID, error)
 
 func WithOrg(org string) func(ID, DocumentIndex) error {
 	return func(id ID, idx DocumentIndex) error {
@@ -180,8 +191,8 @@ func TokenAuthorizedWithOrg(a *Authorization, org string) func(ID, DocumentIndex
 	}
 }
 
-func WhereOrg(org string) func(DocumentIndex) ([]ID, error) {
-	return func(idx DocumentIndex) ([]ID, error) {
+func WhereOrg(org string) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		oid, err := idx.FindOrganizationByName(org)
 		if err != nil {
 			return nil, err
@@ -190,13 +201,13 @@ func WhereOrg(org string) func(DocumentIndex) ([]ID, error) {
 	}
 }
 
-func AuthorizedWhereOrg(a Authorizer, org string) func(DocumentIndex) ([]ID, error) {
+func AuthorizedWhereOrg(a Authorizer, org string) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
 	switch t := a.(type) {
 	case *Authorization:
 		return TokenAuthorizedWhereOrg(t, org)
 	}
 
-	return func(idx DocumentIndex) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		oid, err := idx.FindOrganizationByName(org)
 		if err != nil {
 			return nil, err
@@ -210,8 +221,8 @@ func AuthorizedWhereOrg(a Authorizer, org string) func(DocumentIndex) ([]ID, err
 	}
 }
 
-func TokenAuthorizedWhereOrg(a *Authorization, org string) func(DocumentIndex) ([]ID, error) {
-	return func(idx DocumentIndex) ([]ID, error) {
+func TokenAuthorizedWhereOrg(a *Authorization, org string) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		oid, err := idx.FindOrganizationByName(org)
 		if err != nil {
 			return nil, err
@@ -237,14 +248,14 @@ func TokenAuthorizedWhereOrg(a *Authorization, org string) func(DocumentIndex) (
 	}
 }
 
-func AuthorizedWhere(a Authorizer) func(DocumentIndex) ([]ID, error) {
+func AuthorizedWhere(a Authorizer) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
 	switch t := a.(type) {
 	case *Authorization:
 		return TokenAuthorizedWhere(t)
 	}
 
 	var ids []ID
-	return func(idx DocumentIndex) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		dids, err := idx.GetAccessorsDocuments("user", a.GetUserID())
 		if err != nil {
 			return nil, err
@@ -270,10 +281,10 @@ func AuthorizedWhere(a Authorizer) func(DocumentIndex) ([]ID, error) {
 	}
 }
 
-func TokenAuthorizedWhere(a *Authorization) func(DocumentIndex) ([]ID, error) {
+func TokenAuthorizedWhere(a *Authorization) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
 	// TODO(desa): what to do about retrieving all documents using auth? (e.g. write/read:documents)
 	var ids []ID
-	return func(idx DocumentIndex) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		if !a.IsActive() {
 			return nil, &Error{
 				Code: EUnauthorized,
@@ -299,19 +310,19 @@ func TokenAuthorizedWhere(a *Authorization) func(DocumentIndex) ([]ID, error) {
 	}
 }
 
-func WhereID(docID ID) func(DocumentIndex) ([]ID, error) {
-	return func(idx DocumentIndex) ([]ID, error) {
+func WhereID(docID ID) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		return []ID{docID}, nil
 	}
 }
 
-func AuthorizedWhereID(a Authorizer, docID ID) func(DocumentIndex) ([]ID, error) {
+func AuthorizedWhereID(a Authorizer, docID ID) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
 	switch t := a.(type) {
 	case *Authorization:
 		return TokenAuthorizedWhereID(t, docID)
 	}
 
-	return func(idx DocumentIndex) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		oids, err := idx.GetDocumentsAccessors(docID)
 		if err != nil {
 			return nil, err
@@ -330,8 +341,8 @@ func AuthorizedWhereID(a Authorizer, docID ID) func(DocumentIndex) ([]ID, error)
 	}
 }
 
-func TokenAuthorizedWhereID(a *Authorization, docID ID) func(DocumentIndex) ([]ID, error) {
-	return func(idx DocumentIndex) ([]ID, error) {
+func TokenAuthorizedWhereID(a *Authorization, docID ID) func(DocumentIndex, DocumentDecorator) ([]ID, error) {
+	return func(idx DocumentIndex, _ DocumentDecorator) ([]ID, error) {
 		if !a.IsActive() {
 			return nil, &Error{
 				Code: EUnauthorized,
