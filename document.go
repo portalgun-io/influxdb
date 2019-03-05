@@ -10,14 +10,15 @@ type DocumentService interface {
 }
 
 type Document struct {
-	ID     ID           `json:"id"`
-	Meta   DocumentMeta `json:"meta"`
-	Data   interface{}  `json:"data,omitempty"`   // TODO(desa): maybe this needs to be json.Marshaller & json.Unmarshaler
-	Labels []*Label     `json:"labels,omitempty"` // read only
+	ID      ID           `json:"id"`
+	Meta    DocumentMeta `json:"meta"`
+	Content interface{}  `json:"content,omitempty"` // TODO(desa): maybe this needs to be json.Marshaller & json.Unmarshaler
+	Labels  []*Label     `json:"labels,omitempty"`  // read only
 }
 
 type DocumentMeta struct {
-	Name string `json:"name"`
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
 }
 
 type DocumentStore interface {
@@ -49,12 +50,12 @@ type DocumentIndex interface {
 }
 
 type DocumentDecorator interface {
-	IncludeData() error
+	IncludeContent() error
 	IncludeLabels() error
 }
 
-func IncludeData(_ DocumentIndex, dd DocumentDecorator) ([]ID, error) {
-	return nil, dd.IncludeData()
+func IncludeContent(_ DocumentIndex, dd DocumentDecorator) ([]ID, error) {
+	return nil, dd.IncludeContent()
 }
 
 func IncludeLabels(_ DocumentIndex, dd DocumentDecorator) ([]ID, error) {

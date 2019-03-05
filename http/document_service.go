@@ -131,8 +131,9 @@ func (h *DocumentHandler) handlePostDocument(w http.ResponseWriter, r *http.Requ
 
 type postDocumentRequest struct {
 	*influxdb.Document
-	Namespace string `json:"-"`
-	Org       string `json:"org"`
+	Namespace string      `json:"-"`
+	Org       string      `json:"org"`
+	OrgID     influxdb.ID `json:"orgID"`
 }
 
 func decodePostDocumentRequest(ctx context.Context, r *http.Request) (*postDocumentRequest, error) {
@@ -181,7 +182,7 @@ func (h *DocumentHandler) handleGetDocuments(w http.ResponseWriter, r *http.Requ
 		opt = influxdb.AuthorizedWhereOrg(a, req.Org)
 	}
 
-	ds, err := s.FindDocuments(ctx, opt)
+	ds, err := s.FindDocuments(ctx, opt, influxdb.IncludeLabels)
 	if err != nil {
 		EncodeError(ctx, err, w)
 		return
@@ -237,7 +238,7 @@ func (h *DocumentHandler) handleGetDocument(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhereID(a, req.ID), influxdb.IncludeData)
+	ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhereID(a, req.ID), influxdb.IncludeContent, influxdb.IncludeLabels)
 	if err != nil {
 		EncodeError(ctx, err, w)
 		return
@@ -391,7 +392,7 @@ func (h *DocumentHandler) handlePutDocument(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ds, err := s.FindDocuments(ctx, influxdb.WhereID(req.Document.ID), influxdb.IncludeData)
+	ds, err := s.FindDocuments(ctx, influxdb.WhereID(req.Document.ID), influxdb.IncludeContent)
 	if err != nil {
 		EncodeError(ctx, err, w)
 		return

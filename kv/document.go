@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	documentDataBucket = "/documents/data"
-	documentMetaBucket = "/documents/meta"
+	documentContentBucket = "/documents/content"
+	documentMetaBucket    = "/documents/meta"
 )
 
 func (s *Service) CreateDocumentStore(ctx context.Context, ns string) (influxdb.DocumentStore, error) {
@@ -19,7 +19,7 @@ func (s *Service) CreateDocumentStore(ctx context.Context, ns string) (influxdb.
 	var ds influxdb.DocumentStore
 
 	err := s.kv.Update(func(tx Tx) error {
-		if _, err := tx.Bucket([]byte(path.Join(ns, documentDataBucket))); err != nil {
+		if _, err := tx.Bucket([]byte(path.Join(ns, documentContentBucket))); err != nil {
 			return err
 		}
 
@@ -46,7 +46,7 @@ func (s *Service) FindDocumentStore(ctx context.Context, ns string) (influxdb.Do
 	var ds influxdb.DocumentStore
 
 	err := s.kv.View(func(tx Tx) error {
-		if _, err := tx.Bucket([]byte(path.Join(ns, documentDataBucket))); err != nil {
+		if _, err := tx.Bucket([]byte(path.Join(ns, documentContentBucket))); err != nil {
 			return err
 		}
 
@@ -326,7 +326,7 @@ func (s *Service) putDocument(ctx context.Context, tx Tx, ns string, d *influxdb
 		return err
 	}
 
-	if err := s.putDocumentData(ctx, tx, ns, d.ID, d.Data); err != nil {
+	if err := s.putDocumentContent(ctx, tx, ns, d.ID, d.Content); err != nil {
 		return err
 	}
 
@@ -360,8 +360,8 @@ func (s *Service) putAtID(ctx context.Context, tx Tx, bucket string, id influxdb
 	return nil
 }
 
-func (s *Service) putDocumentData(ctx context.Context, tx Tx, ns string, id influxdb.ID, data interface{}) error {
-	return s.putAtID(ctx, tx, path.Join(ns, documentDataBucket), id, data)
+func (s *Service) putDocumentContent(ctx context.Context, tx Tx, ns string, id influxdb.ID, data interface{}) error {
+	return s.putAtID(ctx, tx, path.Join(ns, documentContentBucket), id, data)
 }
 
 func (s *Service) putDocumentMeta(ctx context.Context, tx Tx, ns string, id influxdb.ID, m *influxdb.DocumentMeta) error {
@@ -434,9 +434,9 @@ func (s *Service) findDocumentMetaByID(ctx context.Context, tx Tx, ns string, id
 	return m, nil
 }
 
-func (s *Service) findDocumentDataByID(ctx context.Context, tx Tx, ns string, id influxdb.ID) (interface{}, error) {
+func (s *Service) findDocumentContentByID(ctx context.Context, tx Tx, ns string, id influxdb.ID) (interface{}, error) {
 	var data interface{}
-	if err := s.findByID(ctx, tx, path.Join(ns, documentDataBucket), id, &data); err != nil {
+	if err := s.findByID(ctx, tx, path.Join(ns, documentContentBucket), id, &data); err != nil {
 		return nil, err
 	}
 
@@ -444,14 +444,13 @@ func (s *Service) findDocumentDataByID(ctx context.Context, tx Tx, ns string, id
 }
 
 type DocumentDecorator struct {
-	data      bool
-	labels    bool
-	accessors bool
+	data   bool
+	labels bool
 
 	writable bool
 }
 
-func (d *DocumentDecorator) IncludeData() error {
+func (d *DocumentDecorator) IncludeContent() error {
 	if d.writable {
 		return &influxdb.Error{
 			Code: influxdb.EInternal,
@@ -513,11 +512,11 @@ func (s *DocumentStore) FindDocuments(ctx context.Context, opts ...influxdb.Docu
 
 		if dd.data {
 			for _, doc := range docs {
-				d, err := s.service.findDocumentDataByID(ctx, tx, s.namespace, doc.ID)
+				d, err := s.service.findDocumentContentByID(ctx, tx, s.namespace, doc.ID)
 				if err != nil {
 					return err
 				}
-				doc.Data = d
+				doc.Content = d
 			}
 		}
 
@@ -575,7 +574,7 @@ func (s *Service) findDocuments(ctx context.Context, tx Tx, ns string, ds *[]*in
 	return nil
 }
 
-//func (s *Service) UpdateDocumentData(ctx context.Context, id influxdb.ID, data interface{}) error {
+//func (s *Service) UpdateDocumentContent(ctx context.Context, id influxdb.ID, data interface{}) error {
 //	return s.kv.Update(func(tx Tx) error {
 //		return nil
 //	})
@@ -638,7 +637,7 @@ func (s *Service) deleteDocument(ctx context.Context, tx Tx, ns string, id influ
 		return err
 	}
 
-	if err := s.deleteDocumentData(ctx, tx, ns, id); err != nil {
+	if err := s.deleteDocumentContent(ctx, tx, ns, id); err != nil {
 		return err
 	}
 
@@ -669,8 +668,8 @@ func (s *Service) deleteAtID(ctx context.Context, tx Tx, bucket string, id influ
 	return nil
 }
 
-func (s *Service) deleteDocumentData(ctx context.Context, tx Tx, ns string, id influxdb.ID) error {
-	return s.deleteAtID(ctx, tx, path.Join(ns, documentDataBucket), id)
+func (s *Service) deleteDocumentContent(ctx context.Context, tx Tx, ns string, id influxdb.ID) error {
+	return s.deleteAtID(ctx, tx, path.Join(ns, documentContentBucket), id)
 }
 
 func (s *Service) deleteDocumentMeta(ctx context.Context, tx Tx, ns string, id influxdb.ID) error {

@@ -56,7 +56,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 			Meta: influxdb.DocumentMeta{
 				Name: "i1",
 			},
-			Data: map[string]interface{}{
+			Content: map[string]interface{}{
 				"v1": "v1",
 			},
 		}
@@ -70,7 +70,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 			Meta: influxdb.DocumentMeta{
 				Name: "i2",
 			},
-			Data: map[string]interface{}{
+			Content: map[string]interface{}{
 				"i2": "i2",
 			},
 		}
@@ -88,7 +88,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 			Meta: influxdb.DocumentMeta{
 				Name: "i2",
 			},
-			Data: map[string]interface{}{
+			Content: map[string]interface{}{
 				"k2": "v2",
 			},
 		}
@@ -116,7 +116,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 	})
 
 	t.Run("u1 can see o1s documents", func(t *testing.T) {
-		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s1), influxdb.IncludeData)
+		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s1), influxdb.IncludeContent)
 		if err != nil {
 			t.Fatalf("failed to retrieve documents: %v", err)
 		}
@@ -127,7 +127,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 	})
 
 	t.Run("u2 can see o1 and o2s documents", func(t *testing.T) {
-		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s2), influxdb.IncludeData)
+		ds, err := s.FindDocuments(ctx, influxdb.AuthorizedWhere(s2), influxdb.IncludeContent)
 		if err != nil {
 			t.Fatalf("failed to retrieve documents: %v", err)
 		}
@@ -143,7 +143,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 			Meta: influxdb.DocumentMeta{
 				Name: "updatei1",
 			},
-			Data: map[string]interface{}{
+			Content: map[string]interface{}{
 				"updatev1": "updatev1",
 			},
 		}
@@ -159,7 +159,7 @@ func TestDocumentStore_Integration(t *testing.T) {
 			Meta: influxdb.DocumentMeta{
 				Name: "updatei2",
 			},
-			Data: map[string]interface{}{
+			Content: map[string]interface{}{
 				"updatev2": "updatev2",
 			},
 		}
@@ -238,7 +238,7 @@ func docsMetaDiff(i1, i2 interface{}) string {
 	return cmp.Diff(i1, i2, documentMetaCmpOptions...)
 }
 
-var documentMetaCmpOptions = append(documentCmpOptions, cmpopts.IgnoreFields(influxdb.Document{}, "Data"))
+var documentMetaCmpOptions = append(documentCmpOptions, cmpopts.IgnoreFields(influxdb.Document{}, "Content"))
 
 var documentCmpOptions = cmp.Options{
 	cmp.Comparer(func(x, y []byte) bool {
