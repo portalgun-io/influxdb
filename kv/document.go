@@ -104,6 +104,50 @@ type DocumentIndex struct {
 	writable bool
 }
 
+func (i *DocumentIndex) AddDocumentLabel(docID, labelID influxdb.ID) error {
+	m := &influxdb.LabelMapping{
+		LabelID:      labelID,
+		ResourceType: influxdb.DocumentsResourceType,
+		ResourceID:   docID,
+	}
+	if err := i.service.createLabelMapping(i.ctx, i.tx, m); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (i *DocumentIndex) RemoveDocumentLabel(docID, labelID influxdb.ID) error {
+	m := &influxdb.LabelMapping{
+		LabelID:      labelID,
+		ResourceType: influxdb.DocumentsResourceType,
+		ResourceID:   docID,
+	}
+	if err := i.service.deleteLabelMapping(i.ctx, i.tx, m); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (i *DocumentIndex) FindLabelByName(name string) (influxdb.ID, error) {
+	m := influxdb.LabelFilter{
+		Name: name,
+	}
+	ls, err := i.service.findLabels(i.ctx, i.tx, m)
+	if err != nil {
+		return influxdb.InvalidID(), err
+	}
+	if len(ls) != 1 {
+		return influxdb.InvalidID(), &influxdb.Error{
+			Code: influxdb.EInternal,
+			Msg:  "found multiple labels matching the name provided",
+		}
+	}
+
+	return ls[0].ID, nil
+}
+
 func (i *DocumentIndex) AddDocumentOwner(id influxdb.ID, ownerType string, ownerID influxdb.ID) error {
 	if err := i.ownerExists(ownerType, ownerID); err != nil {
 		return err
@@ -420,6 +464,19 @@ func (d *DocumentDecorator) IncludeData() error {
 	return nil
 }
 
+func (d *DocumentDecorator) IncludeLabels() error {
+	if d.writable {
+		return &influxdb.Error{
+			Code: influxdb.EInternal,
+			Msg:  "cannot include labels in document",
+		}
+	}
+
+	d.labels = true
+
+	return nil
+}
+
 func (s *DocumentStore) FindDocuments(ctx context.Context, opts ...influxdb.DocumentFindOptions) ([]*influxdb.Document, error) {
 	var ds []*influxdb.Document
 	err := s.service.kv.View(func(tx Tx) error {
@@ -461,6 +518,21 @@ func (s *DocumentStore) FindDocuments(ctx context.Context, opts ...influxdb.Docu
 					return err
 				}
 				doc.Data = d
+			}
+		}
+
+		if dd.labels {
+			for _, doc := range docs {
+				ls := []*influxdb.Label{}
+				f := influxdb.LabelMappingFilter{
+					ResourceID:   doc.ID,
+					ResourceType: influxdb.DocumentsResourceType,
+				}
+				if err := s.service.findResourceLabels(ctx, tx, f, &ls); err != nil {
+					return err
+				}
+
+				doc.Labels = append(doc.Labels, ls...)
 			}
 		}
 

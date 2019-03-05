@@ -10,10 +10,10 @@ type DocumentService interface {
 }
 
 type Document struct {
-	ID       ID            `json:"id"`
-	Meta     DocumentMeta  `json:"meta"`
-	Data     interface{}   `json:"data,omitempty"`     // TODO(desa): maybe this needs to be json.Marshaller & json.Unmarshaler
-	Included []interface{} `json:"included,omitempty"` // read only
+	ID     ID           `json:"id"`
+	Meta   DocumentMeta `json:"meta"`
+	Data   interface{}  `json:"data,omitempty"`   // TODO(desa): maybe this needs to be json.Marshaller & json.Unmarshaler
+	Labels []*Label     `json:"labels,omitempty"` // read only
 }
 
 type DocumentMeta struct {
@@ -39,16 +39,26 @@ type DocumentIndex interface {
 	UsersOrgs(userID ID) ([]ID, error)
 	IsOrgAccessor(userID, orgID ID) error
 
-	// TODO(desa): do we want to keep this one?
 	FindOrganizationByName(n string) (ID, error)
+	FindLabelByName(n string) (ID, error)
+
+	AddDocumentLabel(docID, labelID ID) error
+	RemoveDocumentLabel(docID, labelID ID) error
+
+	// TODO(desa): support finding document by label
 }
 
 type DocumentDecorator interface {
 	IncludeData() error
+	IncludeLabels() error
 }
 
 func IncludeData(_ DocumentIndex, dd DocumentDecorator) ([]ID, error) {
 	return nil, dd.IncludeData()
+}
+
+func IncludeLabels(_ DocumentIndex, dd DocumentDecorator) ([]ID, error) {
+	return nil, dd.IncludeLabels()
 }
 
 type DocumentCreateOptions func(ID, DocumentIndex) error
@@ -65,6 +75,32 @@ func WithOrg(org string) func(ID, DocumentIndex) error {
 		}
 
 		return idx.AddDocumentOwner(id, "org", oid)
+	}
+}
+
+func WithLabel(label string) func(ID, DocumentIndex) error {
+	return func(id ID, idx DocumentIndex) error {
+		// TODO(desa): turns out that labels are application global, at somepoint we'll
+		// want to scope these by org. We should add auth at that point.
+		lid, err := idx.FindLabelByName(label)
+		if err != nil {
+			return err
+		}
+
+		return idx.AddDocumentLabel(id, lid)
+	}
+}
+
+func WithoutLabel(label string) func(ID, DocumentIndex) error {
+	return func(id ID, idx DocumentIndex) error {
+		// TODO(desa): turns out that labels are application global, at somepoint we'll
+		// want to scope these by org. We should add auth at that point.
+		lid, err := idx.FindLabelByName(label)
+		if err != nil {
+			return err
+		}
+
+		return idx.RemoveDocumentLabel(id, lid)
 	}
 }
 
