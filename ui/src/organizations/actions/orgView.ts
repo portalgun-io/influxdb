@@ -1,14 +1,26 @@
-import {Task, Organization} from 'src/types/v2'
+// Libraries
 import {ScraperTargetRequest} from '@influxdata/influx'
 
+// API
 import {client} from 'src/utils/api'
+
+// Actions
+import {
+  Action as TaskLabelsAction,
+  addTaskLabelsFactoryAsync,
+} from 'src/tasks/actions/v2/labels'
+
+// Types
+import {Task, Organization, AppState} from 'src/types/v2'
 
 export enum ActionTypes {
   GetTasks = 'GET_TASKS',
   PopulateTasks = 'POPULATE_TASKS',
+  AddTaskLabels = 'ADD_TASK_LABELS',
+  RemoveTaskLabels = 'REMOVE_TASK_LABELS',
 }
 
-export type Actions = PopulateTasks
+export type Actions = TaskLabelsAction | PopulateTasks
 
 export interface PopulateTasks {
   type: ActionTypes.PopulateTasks
@@ -31,3 +43,7 @@ export const getTasks = (org: Organization) => async dispatch => {
 export const createScraper = (scraper: ScraperTargetRequest) => async () => {
   await client.scrapers.create(scraper)
 }
+
+export const addTaskLabelsAsync = addTaskLabelsFactoryAsync(
+  (state: AppState) => state.orgView.tasks
+)
