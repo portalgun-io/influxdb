@@ -14,24 +14,25 @@ const (
 	documentMetaBucket    = "/documents/meta"
 )
 
+func (s *Service) initializeDocuments(ctx context.Context, tx Tx) error {
+	if _, err := s.createDocumentStore(ctx, tx, "templates"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *Service) CreateDocumentStore(ctx context.Context, ns string) (influxdb.DocumentStore, error) {
 	// TODO(desa): keep track of which namespaces exist.
 	var ds influxdb.DocumentStore
 
 	err := s.kv.Update(func(tx Tx) error {
-		if _, err := tx.Bucket([]byte(path.Join(ns, documentContentBucket))); err != nil {
+		store, err := s.createDocumentStore(ctx, tx, ns)
+		if err != nil {
 			return err
 		}
 
-		if _, err := tx.Bucket([]byte(path.Join(ns, documentMetaBucket))); err != nil {
-			return err
-		}
-
-		ds = &DocumentStore{
-			namespace: ns,
-			service:   s,
-		}
-
+		ds = store
 		return nil
 	})
 
@@ -40,6 +41,21 @@ func (s *Service) CreateDocumentStore(ctx context.Context, ns string) (influxdb.
 	}
 
 	return ds, nil
+}
+
+func (s *Service) createDocumentStore(ctx context.Context, tx Tx, ns string) (influxdb.DocumentStore, error) {
+	if _, err := tx.Bucket([]byte(path.Join(ns, documentContentBucket))); err != nil {
+		return nil, err
+	}
+
+	if _, err := tx.Bucket([]byte(path.Join(ns, documentMetaBucket))); err != nil {
+		return nil, err
+	}
+
+	return &DocumentStore{
+		namespace: ns,
+		service:   s,
+	}, nil
 }
 
 func (s *Service) FindDocumentStore(ctx context.Context, ns string) (influxdb.DocumentStore, error) {

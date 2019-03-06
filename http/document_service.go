@@ -58,9 +58,6 @@ func NewDocumentHandler(b *DocumentBackend) *DocumentHandler {
 	h.HandlerFunc("PUT", documentPath, h.handlePutDocument)
 	h.HandlerFunc("DELETE", documentPath, h.handleDeleteDocument)
 
-	// TODO(desa): delete this
-	//h.DocumentService.CreateDocumentStore(context.TODO(), "templates")
-
 	return h
 }
 
@@ -70,6 +67,9 @@ type documentResponse struct {
 }
 
 func newDocumentResponse(ns string, d *influxdb.Document) *documentResponse {
+	if d.Labels == nil {
+		d.Labels = []*influxdb.Label{}
+	}
 	return &documentResponse{
 		Links: map[string]string{
 			"self": fmt.Sprintf("/api/v2/documents/%s/%s", ns, d.ID),
@@ -80,12 +80,9 @@ func newDocumentResponse(ns string, d *influxdb.Document) *documentResponse {
 
 type documentsResponse struct {
 	Documents []*documentResponse `json:"documents"`
-	Included  []interface{}       `json:"included,omitempty"`
 }
 
 func newDocumentsResponse(ns string, docs []*influxdb.Document) *documentsResponse {
-	// TODO(desa): dedupe everything included in each document into a single included
-	// that is returned a the top level.
 	ds := make([]*documentResponse, 0, len(docs))
 	for _, doc := range docs {
 		ds = append(ds, newDocumentResponse(ns, doc))
@@ -118,7 +115,18 @@ func (h *DocumentHandler) handlePostDocument(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := s.CreateDocument(ctx, req.Document, influxdb.AuthorizedWithOrg(a, req.Org)); err != nil {
+	opts := []influxdb.DocumentCreateOptions{}
+	if req.OrgID.Valid() {
+		opts = append(opts, influxdb.AuthorizedWithOrgID(a, req.OrgID))
+	} else {
+		opts = append(opts, influxdb.AuthorizedWithOrg(a, req.Org))
+	}
+	for _, label := range req.Labels {
+		// TODO(desa): make these AuthorizedWithLabel eventually
+		opts = append(opts, influxdb.WithLabel(label))
+	}
+
+	if err := s.CreateDocument(ctx, req.Document, opts...); err != nil {
 		EncodeError(ctx, err, w)
 		return
 	}
@@ -133,7 +141,8 @@ type postDocumentRequest struct {
 	*influxdb.Document
 	Namespace string      `json:"-"`
 	Org       string      `json:"org"`
-	OrgID     influxdb.ID `json:"orgID"`
+	OrgID     influxdb.ID `json:"orgID,omitempty"`
+	Labels    []string    `json:"labels"` // TODO(desa): should this be IDs or strings?
 }
 
 func decodePostDocumentRequest(ctx context.Context, r *http.Request) (*postDocumentRequest, error) {

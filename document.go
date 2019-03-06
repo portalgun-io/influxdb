@@ -79,6 +79,108 @@ func WithOrg(org string) func(ID, DocumentIndex) error {
 	}
 }
 
+func AuthorizedWithOrg(a Authorizer, org string) func(ID, DocumentIndex) error {
+	switch t := a.(type) {
+	case *Authorization:
+		return TokenAuthorizedWithOrg(t, org)
+	}
+
+	return func(id ID, idx DocumentIndex) error {
+		oid, err := idx.FindOrganizationByName(org)
+		if err != nil {
+			return err
+		}
+
+		if err := idx.IsOrgAccessor(a.GetUserID(), oid); err != nil {
+			return err
+		}
+
+		return idx.AddDocumentOwner(id, "org", oid)
+	}
+}
+
+func TokenAuthorizedWithOrg(a *Authorization, org string) func(ID, DocumentIndex) error {
+	return func(id ID, idx DocumentIndex) error {
+		if !a.IsActive() {
+			return &Error{
+				Code: EUnauthorized,
+				Msg:  "authorization cannot add org as document owner",
+			}
+		}
+
+		oid, err := idx.FindOrganizationByName(org)
+		if err != nil {
+			return err
+		}
+
+		p := Permission{
+			Action: WriteAction,
+			Resource: Resource{
+				Type:  DocumentsResourceType,
+				OrgID: &oid,
+			},
+		}
+
+		if !a.Allowed(p) {
+			return &Error{
+				Code: EUnauthorized,
+				Msg:  "authorization cannot add org as document owner",
+			}
+		}
+
+		return idx.AddDocumentOwner(id, "org", oid)
+	}
+}
+
+func WithOrgID(orgID ID) func(ID, DocumentIndex) error {
+	return func(id ID, idx DocumentIndex) error {
+		return idx.AddDocumentOwner(id, "org", orgID)
+	}
+}
+
+func AuthorizedWithOrgID(a Authorizer, orgID ID) func(ID, DocumentIndex) error {
+	switch t := a.(type) {
+	case *Authorization:
+		return TokenAuthorizedWithOrgID(t, orgID)
+	}
+
+	return func(id ID, idx DocumentIndex) error {
+		if err := idx.IsOrgAccessor(a.GetUserID(), orgID); err != nil {
+			return err
+		}
+
+		return idx.AddDocumentOwner(id, "org", orgID)
+	}
+}
+
+func TokenAuthorizedWithOrgID(a *Authorization, orgID ID) func(ID, DocumentIndex) error {
+	return func(id ID, idx DocumentIndex) error {
+		if !a.IsActive() {
+			return &Error{
+				Code: EUnauthorized,
+				Msg:  "authorization cannot add org as document owner",
+			}
+		}
+
+		p := Permission{
+			Action: WriteAction,
+			Resource: Resource{
+				Type:  DocumentsResourceType,
+				OrgID: &orgID,
+			},
+		}
+
+		if !a.Allowed(p) {
+			return &Error{
+				Code: EUnauthorized,
+				Msg:  "authorization cannot add org as document owner",
+			}
+		}
+
+		return idx.AddDocumentOwner(id, "org", orgID)
+	}
+}
+
 func WithLabel(label string) func(ID, DocumentIndex) error {
 	return func(id ID, idx DocumentIndex) error {
 		// TODO(desa): turns out that labels are application global, at somepoint we'll
@@ -172,59 +274,6 @@ func TokenAuthorized(a *Authorization) func(ID, DocumentIndex) error {
 			Code: EUnauthorized,
 			Msg:  "authorization cannot access document",
 		}
-	}
-}
-
-func AuthorizedWithOrg(a Authorizer, org string) func(ID, DocumentIndex) error {
-	switch t := a.(type) {
-	case *Authorization:
-		return TokenAuthorizedWithOrg(t, org)
-	}
-
-	return func(id ID, idx DocumentIndex) error {
-		oid, err := idx.FindOrganizationByName(org)
-		if err != nil {
-			return err
-		}
-
-		if err := idx.IsOrgAccessor(a.GetUserID(), oid); err != nil {
-			return err
-		}
-
-		return idx.AddDocumentOwner(id, "org", oid)
-	}
-}
-
-func TokenAuthorizedWithOrg(a *Authorization, org string) func(ID, DocumentIndex) error {
-	return func(id ID, idx DocumentIndex) error {
-		if !a.IsActive() {
-			return &Error{
-				Code: EUnauthorized,
-				Msg:  "authorization cannot add org as document owner",
-			}
-		}
-
-		oid, err := idx.FindOrganizationByName(org)
-		if err != nil {
-			return err
-		}
-
-		p := Permission{
-			Action: WriteAction,
-			Resource: Resource{
-				Type:  DocumentsResourceType,
-				OrgID: &oid,
-			},
-		}
-
-		if !a.Allowed(p) {
-			return &Error{
-				Code: EUnauthorized,
-				Msg:  "authorization cannot add org as document owner",
-			}
-		}
-
-		return idx.AddDocumentOwner(id, "org", oid)
 	}
 }
 
