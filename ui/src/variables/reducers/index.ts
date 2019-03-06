@@ -3,12 +3,14 @@ import {produce} from 'immer'
 
 // Types
 import {RemoteDataState} from 'src/types'
+import {VariableValues} from 'src/variables/types'
 import {Action} from 'src/variables/actions'
 import {Variable} from '@influxdata/influx'
 
 export const initialState = (): VariablesState => ({
   status: RemoteDataState.NotStarted,
   variables: {},
+  values: {},
 })
 
 export interface VariablesState {
@@ -17,6 +19,12 @@ export interface VariablesState {
     [variableID: string]: {
       status: RemoteDataState // Loading status of an individual variable
       variable: Variable
+    }
+  }
+  values: {
+    [contextID: string]: {
+      status: RemoteDataState
+      values: VariableValues
     }
   }
 }
