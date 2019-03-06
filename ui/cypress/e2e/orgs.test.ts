@@ -9,45 +9,7 @@ describe('Orgs', () => {
     cy.visit(orgRoute)
   })
 
-  for (let i = 0; i < 75; i++) {
-    it('can create an org', () => {
-      cy.get('.index-list--row').should('have.length', 1)
-
-      cy.getByTestID('create-org-button').click()
-
-      const orgName = '🅱️organization'
-
-      cy.getByTestID('create-org-name-input').type(orgName)
-
-      cy.getByTestID('create-org-submit-button').click()
-
-      cy.get('.index-list--row')
-        .should('contain', orgName)
-        .and('have.length', 2)
-    })
-
-    it('can delete an org', () => {
-      cy.createOrg()
-
-      cy.visit(orgRoute)
-
-      cy.getByTestID('table-row').should('have.length', 2)
-
-      cy.getByTestID('table-row')
-        .last()
-        .trigger('mouseover')
-        .within(() => {
-          cy.getByTestID('delete-button')
-            .trigger('mouseover')
-            .click()
-
-          cy.getByTestID('confirmation-button').click()
-        })
-
-      cy.getByTestID('table-row').should('have.length', 1)
-    })
-
-    //TODO: skipping update an org name because it is flaky but needs fixing: https://github.com/influxdata/influxdb/issues/12311
+  for (let i = 0; i < 200; i++) {
     it('can update an org name', () => {
       cy.createOrg().then(({body}) => {
         const newName = 'new 🅱️organization'
@@ -67,4 +29,41 @@ describe('Orgs', () => {
       })
     })
   }
+
+  it('can create an org', () => {
+    cy.get('.index-list--row').should('have.length', 1)
+
+    cy.getByTestID('create-org-button').click()
+
+    const orgName = '🅱️organization'
+
+    cy.getByTestID('create-org-name-input').type(orgName)
+
+    cy.getByTestID('create-org-submit-button').click()
+
+    cy.get('.index-list--row')
+      .should('contain', orgName)
+      .and('have.length', 2)
+  })
+
+  it('can delete an org', () => {
+    cy.createOrg()
+
+    cy.visit(orgRoute)
+
+    cy.getByTestID('table-row').should('have.length', 2)
+
+    cy.getByTestID('table-row')
+      .last()
+      .trigger('mouseover')
+      .within(() => {
+        cy.getByTestID('delete-button')
+          .trigger('mouseover')
+          .click()
+
+        cy.getByTestID('confirmation-button').click()
+      })
+
+    cy.getByTestID('table-row').should('have.length', 1)
+  })
 })
